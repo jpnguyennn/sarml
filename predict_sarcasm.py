@@ -23,6 +23,9 @@ import tensorflow as tf
 from tensorflow.keras.models import load_model
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 
+# Statistic imports
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+
 # Suppress warnings
 import warnings
 warnings.filterwarnings('ignore')
@@ -306,7 +309,16 @@ Output format:
     print(f"Total examples: {len(predictions)}")
     print(f"Predicted NOT sarcastic (0): {(predictions == 0).sum()} ({100*(predictions == 0).sum()/len(predictions):.1f}%)")
     print(f"Predicted sarcastic (1): {(predictions == 1).sum()} ({100*(predictions == 1).sum()/len(predictions):.1f}%)")
-    print()
+    
+    # outputting recall, precision, f1, accuracy
+    print("-----")
+    print(f"Recall: {recall_score(df['label'], predictions)}")
+    print(f"Precision: {precision_score(df['label'], predictions)}")
+    print(f"F1: {f1_score(df['label'], predictions)}")
+    print(f"Accuracy: {accuracy_score(df['label'], predictions)}")
+    
+    print("-----")
+    
     print("Examples:")
     for idx in range(min(5, len(output_df))):
         text = output_df.iloc[idx]['text'][:80]
