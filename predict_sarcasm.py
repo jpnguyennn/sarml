@@ -1,14 +1,4 @@
-"""
-Sarcasm Detection Inference Script
-Required interface for CS 461 Final Project
-
-Usage:
-    python predict_sarcasm.py --input test_data.csv --output predictions.csv
-
-Input format: CSV with at least one column titled 'text'
-Output format: CSV with two columns: text and prediction (0=not sarcasm, 1=sarcasm)
-"""
-
+# import necessary libraries
 import argparse
 import pandas as pd
 import numpy as np
@@ -31,26 +21,18 @@ import warnings
 warnings.filterwarnings('ignore')
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
-
-# ==================== CONFIGURATION ====================
 class Config:
-    """Configuration for inference"""
     MODEL_DIR = './models/'
     MAX_SEQUENCE_LENGTH = 150
     VOCAB_SIZE = 10000
 
-
-# ==================== PREPROCESSING ====================
 def preprocess_text(text):
-    """Clean and preprocess text - MUST match training preprocessing"""
+    # removes all capitalization and whitespaces in the text
     text = text.lower()
-    text = re.sub(r'http\S+|www\S+', '', text)  # Remove URLs
-    text = re.sub(r'\s+', ' ', text).strip()    # Clean whitespace
+    text = re.sub(r'\s+', ' ', text).strip()
     return text
 
-
 def extract_features(df):
-    """Extract manual features - MUST match training feature extraction"""
     features = pd.DataFrame()
     
     # Punctuation counts
@@ -70,18 +52,10 @@ def extract_features(df):
     
     return features
 
-
-# ==================== SARCASM DETECTOR ====================
 class SarcasmDetector:
-    """
-    Loads trained models and performs inference on new text
-    """
-    
     def __init__(self, model_dir='./models/'):
-        """Load trained models and preprocessors"""
         self.model_dir = model_dir
         
-        # Check if models directory exists
         if not os.path.exists(model_dir):
             raise FileNotFoundError(
                 f"Models directory '{model_dir}' not found. "
@@ -122,7 +96,7 @@ class SarcasmDetector:
                         compile=False
                     )
             
-            print(f"✓ Successfully loaded {len(self.models)} models")
+            print(f" - Successfully loaded {len(self.models)} models")
             
         except FileNotFoundError as e:
             print(f"Error: Required model file not found: {e}")
@@ -134,28 +108,20 @@ class SarcasmDetector:
             sys.exit(1)
     
     def predict(self, texts):
-        """
-        Predict sarcasm for a list of texts
-        
-        Args:
-            texts: List of strings or pandas Series
-            
-        Returns:
-            numpy array of predictions (0 or 1)
-        """
+        # predicts the sarcasm in the given input dataset
         if isinstance(texts, str):
             texts = [texts]
         
-        # Convert to DataFrame for feature extraction
+        # convert to DataFrame for feature extraction
         df = pd.DataFrame({'text': texts})
         
-        # Store original text for features
+        # store original text for features
         original_texts = df['text'].copy()
         
-        # Preprocess text
+        # preprocess text
         clean_texts = df['text'].apply(preprocess_text)
         
-        # Get predictions from each model in ensemble
+        # get predictions from each model in ensemble
         predictions = {}
         
         for model_key, model in self.models.items():
@@ -163,7 +129,6 @@ class SarcasmDetector:
                 # SVM uses TF-IDF features
                 tfidf_features = self.tfidf_vectorizer.transform(clean_texts)
                 
-                # Check if this SVM uses manual features
                 if 'with_features' in model_key:
                     manual_features = extract_features(pd.DataFrame({'text': original_texts}))
                     combined_features = hstack([tfidf_features, manual_features])
@@ -172,7 +137,7 @@ class SarcasmDetector:
                     predictions[model_key] = model.predict(tfidf_features)
             
             else:
-                # Neural networks use sequences
+                # NNs use sequences
                 sequences = self.tokenizer.texts_to_sequences(clean_texts)
                 padded_sequences = pad_sequences(
                     sequences,
@@ -190,18 +155,10 @@ class SarcasmDetector:
         return ensemble_predictions
     
     def predict_with_confidence(self, texts):
-        """
-        Predict with confidence scores
-        
-        Returns:
-            predictions, confidence_scores
-        """
         predictions = self.predict(texts)
         
-        # Confidence is the proportion of models that agree
         votes = 0
         for model_key, model in self.models.items():
-            # Get individual predictions (simplified for confidence)
             votes += self.predict(texts)
         
         confidence = votes / len(self.models)
@@ -211,20 +168,11 @@ class SarcasmDetector:
 
 # ==================== COMMAND LINE INTERFACE ====================
 def main():
-    """Main inference function matching required interface"""
     parser = argparse.ArgumentParser(
         description='Sarcasm Detection Inference',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-Example usage:
-    python predict_sarcasm.py --input test_data.csv --output predictions.csv
-
-Input format:
-    CSV file with at least one column titled 'text'
-
-Output format:
-    CSV file with two columns: 'text' and 'prediction'
-    Predictions: 0 (not sarcasm) or 1 (sarcasm)
+        Example usage: python predict_sarcasm.py --input test_data.csv --output predictions.csv
         """
     )
     
@@ -232,14 +180,14 @@ Output format:
         '--input',
         type=str,
         required=True,
-        help='Path to input CSV file with text column'
+        help='Path to input CSV file'
     )
     
     parser.add_argument(
         '--output',
         type=str,
         required=True,
-        help='Path to output CSV file for predictions'
+        help='Path to output CSV file'
     )
     
     parser.add_argument(
@@ -251,17 +199,15 @@ Output format:
     
     args = parser.parse_args()
     
-    print("="*60)
-    print("SARCASM DETECTION - INFERENCE")
-    print("="*60)
-    print(f"Input file: {args.input}")
-    print(f"Output file: {args.output}")
+    print("-" * 20)
+    print(f" - Input file: {args.input}")
+    print(f" - Output file: {args.output}")
     print()
     
     # Load input data
     try:
         df = pd.read_csv(args.input)
-        print(f"✓ Loaded {len(df)} examples from {args.input}")
+        print(f" - Loaded {len(df)} examples from {args.input}")
     except FileNotFoundError:
         print(f"Error: Input file '{args.input}' not found")
         sys.exit(1)
@@ -297,15 +243,15 @@ Output format:
     # Save predictions
     try:
         output_df.to_csv(args.output, index=False)
-        print(f"✓ Saved predictions to {args.output}")
+        print(f" - Saved predictions to {args.output}")
     except Exception as e:
-        print(f"Error saving predictions: {e}")
+        print(f" ! Error saving predictions: {e}")
         sys.exit(1)
     
     # Print summary statistics
-    print("\n" + "="*60)
-    print("PREDICTION SUMMARY")
-    print("="*60)
+    print("\n" + "-" * 20)
+    print("SUMMARY")
+    print("-" * 60)
     print(f"Total examples: {len(predictions)}")
     print(f"Predicted NOT sarcastic (0): {(predictions == 0).sum()} ({100*(predictions == 0).sum()/len(predictions):.1f}%)")
     print(f"Predicted sarcastic (1): {(predictions == 1).sum()} ({100*(predictions == 1).sum()/len(predictions):.1f}%)")
@@ -318,15 +264,6 @@ Output format:
     print(f"Accuracy: {accuracy_score(df['label'], predictions)}")
     
     print("-----")
-    
-    print("Examples:")
-    for idx in range(min(5, len(output_df))):
-        text = output_df.iloc[idx]['text'][:80]
-        pred = "SARCASTIC" if output_df.iloc[idx]['prediction'] == 1 else "NOT SARCASTIC"
-        print(f"  [{pred:15}] {text}...")
-    
-    print("\n✓ Inference complete!")
-
 
 if __name__ == "__main__":
     main()
