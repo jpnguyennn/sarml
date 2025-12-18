@@ -57,100 +57,47 @@ class SarcasmDetector:
         self.model_dir = model_dir
         
         if not os.path.exists(model_dir):
-            raise FileNotFoundError(
-                f"Models directory '{model_dir}' not found. "
-                "Please ensure you have trained models in the models/ directory."
-            )
-        
-        print("Loading models...")
+            raise FileNotFoundError(f"Models directory '{model_dir}' not found.")
         
         try:
-            # Load ensemble configuration
-            with open(f'{model_dir}model_weights.pkl', 'rb') as f:
-                self.ensemble_config = pickle.load(f)
-            
-            print(f"Ensemble: {self.ensemble_config['best_ensemble']}")
-            
-            # Load preprocessors
-            with open(f'{model_dir}tfidf_vectorizer.pkl', 'rb') as f:
-                self.tfidf_vectorizer = pickle.load(f)
-            
-            with open(f'{model_dir}tokenizer.pkl', 'rb') as f:
+            # Load Tokenizers [cite: 148, 216]
+            with open(os.path.join(model_dir, 'tokenizer.pkl'), 'rb') as f:
                 self.tokenizer = pickle.load(f)
+            with open(os.path.join(model_dir, 'tokenizer_clean.pkl'), 'rb') as f:
+                self.tokenizer_clean = pickle.load(f)
             
-            # Load models based on ensemble configuration
-            self.models = {}
+            # Load Deep Learning Models (.h5 files as specified)
+            # 1. Standard LSTM
+            self.model_lstm = load_model(os.path.join(model_dir, 'lstm_model.h5'))
+            # 2. Bidirectional LSTM
+            self.model_bilstm = load_model(os.path.join(model_dir, 'bilstm_model.h5'))
+            # 3. CNN Model
+            self.model_cnn = load_model(os.path.join(model_dir, 'cnn_model.h5'))
             
-            for model_key in self.ensemble_config['model_keys']:
-                if 'svm' in model_key:
-                    with open(f'{model_dir}svm_model.pkl', 'rb') as f:
-                        self.models[model_key] = pickle.load(f)
-                elif 'stacked_bilstm' in model_key:
-                    self.models[model_key] = load_model(
-                        f'{model_dir}stacked_bilstm_model.h5',
-                        compile=False
-                    )
-                elif 'cnn' in model_key:
-                    self.models[model_key] = load_model(
-                        f'{model_dir}cnn_model.h5',
-                        compile=False
-                    )
+            print(" - All models loaded successfully.")
             
-            print(f" - Successfully loaded {len(self.models)} models")
-            
-        except FileNotFoundError as e:
-            print(f"Error: Required model file not found: {e}")
-            print("\nPlease run the training script first:")
-            print("  python src/train_model.py")
-            sys.exit(1)
         except Exception as e:
             print(f"Error loading models: {e}")
             sys.exit(1)
     
     def predict(self, texts):
-        # predicts the sarcasm in the given input dataset
         if isinstance(texts, str):
             texts = [texts]
         
-        # convert to DataFrame for feature extraction
         df = pd.DataFrame({'text': texts})
-        
-        # store original text for features
-        original_texts = df['text'].copy()
-        
-        # preprocess text
         clean_texts = df['text'].apply(preprocess_text)
+        seq_standard = pad_sequences(self.tokenizer.texts_to_sequences(df['text']), 
+                                    maxlen=Config.MAX_SEQUENCE_LENGTH)
+        seq_clean = pad_sequences(self.tokenizer_clean.texts_to_sequences(clean_texts), 
+                                 maxlen=Config.MAX_SEQUENCE_LENGTH)
         
-        # get predictions from each model in ensemble
-        predictions = {}
+        print("Running Ensemble Inference...")
+        pred_lstm = (self.model_lstm.predict(seq_standard, verbose=0) > 0.5).astype(int).flatten()
+        pred_bilstm = (self.model_bilstm.predict(seq_clean, verbose=0) > 0.5).astype(int).flatten()
+        pred_cnn = (self.model_cnn.predict(seq_clean, verbose=0) > 0.5).astype(int).flatten()
         
-        for model_key, model in self.models.items():
-            if 'svm' in model_key:
-                # SVM uses TF-IDF features
-                tfidf_features = self.tfidf_vectorizer.transform(clean_texts)
-                
-                if 'with_features' in model_key:
-                    manual_features = extract_features(pd.DataFrame({'text': original_texts}))
-                    combined_features = hstack([tfidf_features, manual_features])
-                    predictions[model_key] = model.predict(combined_features)
-                else:
-                    predictions[model_key] = model.predict(tfidf_features)
-            
-            else:
-                # NNs use sequences
-                sequences = self.tokenizer.texts_to_sequences(clean_texts)
-                padded_sequences = pad_sequences(
-                    sequences,
-                    maxlen=Config.MAX_SEQUENCE_LENGTH
-                )
-                
-                probs = model.predict(padded_sequences, verbose=0)
-                predictions[model_key] = (probs > 0.5).astype(int).flatten()
-        
-        # Ensemble: Majority voting
-        votes = sum(predictions.values())
-        threshold = len(predictions) / 2
-        ensemble_predictions = (votes > threshold).astype(int)
+        votes = pred_lstm + pred_bilstm + pred_cnn
+        ensemble_predictions = (votes >= 2).astype(int)
         
         return ensemble_predictions
     
@@ -251,17 +198,17 @@ def main():
     # Print summary statistics
     print("\n" + "-" * 20)
     print("SUMMARY")
-    print("-" * 60)
+    print("-" * 20)
     print(f"Total examples: {len(predictions)}")
     print(f"Predicted NOT sarcastic (0): {(predictions == 0).sum()} ({100*(predictions == 0).sum()/len(predictions):.1f}%)")
     print(f"Predicted sarcastic (1): {(predictions == 1).sum()} ({100*(predictions == 1).sum()/len(predictions):.1f}%)")
     
     # outputting recall, precision, f1, accuracy
     print("-----")
-    print(f"Recall: {recall_score(df['label'], predictions)}")
-    print(f"Precision: {precision_score(df['label'], predictions)}")
-    print(f"F1: {f1_score(df['label'], predictions)}")
-    print(f"Accuracy: {accuracy_score(df['label'], predictions)}")
+    print(f"Recall: {recall_score(df['label'], predictions)*100:.4f}%")
+    print(f"Precision: {precision_score(df['label'], predictions)*100:.4f}%")
+    print(f"F1: {f1_score(df['label'], predictions)*100:.4f}%")
+    print(f"Accuracy: {accuracy_score(df['label'], predictions)*100:.4f}%")
     
     print("-----")
 
