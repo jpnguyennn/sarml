@@ -1,4 +1,3 @@
-# Python Dependencies for Sarcasm Detection Project
 # CS 461 Final Project
 # Compatible with Python 3.10-3.13
 
@@ -10,11 +9,11 @@ pandas>=2.1.0
 scikit-learn>=1.3.0
 scipy>=1.11.0
 
-# Deep learning (TensorFlow 2.15+ supports Python 3.11-3.13)
+# Deep learning 
 tensorflow>=2.15.0
 keras>=3.0.0
 
-# Visualization (for training/analysis)
+# Visualization 
 matplotlib>=3.8.0
 seaborn>=0.13.0
 

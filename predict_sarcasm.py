@@ -8,15 +8,12 @@ import os
 import sys
 from scipy.sparse import hstack
 
-# TensorFlow/Keras imports
 import tensorflow as tf
 from tensorflow.keras.models import load_model
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 
-# Statistic imports
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 
-# Suppress warnings
 import warnings
 warnings.filterwarnings('ignore')
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
@@ -27,7 +24,6 @@ class Config:
     VOCAB_SIZE = 10000
 
 def preprocess_text(text):
-    # removes all capitalization and whitespaces in the text
     text = text.lower()
     text = re.sub(r'\s+', ' ', text).strip()
     return text
@@ -35,18 +31,15 @@ def preprocess_text(text):
 def extract_features(df):
     features = pd.DataFrame()
     
-    # Punctuation counts
     features['exclamation_count'] = df['text'].str.count('!')
     features['question_count'] = df['text'].str.count(r'\?')  # Fixed: added 'r' prefix
     features['ellipsis_count'] = df['text'].str.count(r'\.\.\.')
     
-    # Capitalization
     features['capital_ratio'] = df['text'].apply(
         lambda x: sum(1 for c in x if c.isupper()) / (len(x) + 1)
     )
     features['has_all_caps_word'] = df['text'].str.contains(r'\b[A-Z]{2,}\b').astype(int)
     
-    # Length metrics
     features['text_length'] = df['text'].str.len()
     features['word_count'] = df['text'].str.split().str.len()
     
@@ -112,8 +105,6 @@ class SarcasmDetector:
         
         return predictions, confidence
 
-
-# ==================== COMMAND LINE INTERFACE ====================
 def main():
     parser = argparse.ArgumentParser(
         description='Sarcasm Detection Inference',
@@ -162,7 +153,6 @@ def main():
         print(f"Error reading input file: {e}")
         sys.exit(1)
     
-    # Check for 'text' column
     if 'text' not in df.columns:
         print("Error: Input CSV must have a column named 'text'")
         print(f"Found columns: {df.columns.tolist()}")
@@ -174,14 +164,11 @@ def main():
         print("Filling missing values with empty string")
         df['text'] = df['text'].fillna('')
     
-    # Initialize detector
     detector = SarcasmDetector(model_dir=args.model_dir)
     
-    # Make predictions
     print(f"\nMaking predictions...")
     predictions = detector.predict(df['text'])
     
-    # Create output DataFrame
     output_df = pd.DataFrame({
         'text': df['text'],
         'prediction': predictions
@@ -195,7 +182,6 @@ def main():
         print(f" ! Error saving predictions: {e}")
         sys.exit(1)
     
-    # Print summary statistics
     print("\n" + "-" * 20)
     print("SUMMARY")
     print("-" * 20)
@@ -203,7 +189,6 @@ def main():
     print(f"Predicted NOT sarcastic (0): {(predictions == 0).sum()} ({100*(predictions == 0).sum()/len(predictions):.1f}%)")
     print(f"Predicted sarcastic (1): {(predictions == 1).sum()} ({100*(predictions == 1).sum()/len(predictions):.1f}%)")
     
-    # outputting recall, precision, f1, accuracy
     print("-----")
     print(f"Recall: {recall_score(df['label'], predictions)*100:.4f}%")
     print(f"Precision: {precision_score(df['label'], predictions)*100:.4f}%")
