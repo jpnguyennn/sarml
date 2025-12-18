@@ -653,7 +653,6 @@ def main():
                          save_path=f'{Config.FIGURES_DIR}training_history_bilstm.png')
     plot_training_history(cnn_history, 'CNN',
                          save_path=f'{Config.FIGURES_DIR}training_history_cnn.png')
-    print("✓ Visualizations generated!")
     
 
     
@@ -675,8 +674,7 @@ def main():
         'test_accuracy': test_results['accuracy']
     }
     pickle.dump(ensemble_config, open(f'{Config.MODEL_DIR}model_weights.pkl', 'wb'))
-    
-    print("✓ Models saved successfully!")
+
     print(f"  - {Config.MODEL_DIR}stacked_bilstm_model.h5")
     print(f"  - {Config.MODEL_DIR}cnn_model.h5")
     print(f"  - {Config.MODEL_DIR}svm_model.pkl")
