@@ -381,7 +381,7 @@ def prepare_sequences(train_df, valid_df, test_df):
 
 
 def train_lstm(X_train_seq, y_train, X_valid_seq, y_valid, model_name="LSTM"):
-    print(f"\nTraining {model_name}...")
+    print(f"\nTraining {model_name}")
     
     model = Sequential([
         Embedding(input_dim=Config.VOCAB_SIZE, output_dim=32, input_length=Config.MAX_SEQUENCE_LENGTH),
@@ -404,7 +404,7 @@ def train_lstm(X_train_seq, y_train, X_valid_seq, y_valid, model_name="LSTM"):
 
 
 def train_bilstm(X_train_seq, y_train, X_valid_seq, y_valid, model_name="BiLSTM"):
-    print(f"\nTraining {model_name}...")
+    print(f"\nTraining {model_name}")
     
     model = Sequential([
         Embedding(input_dim=Config.VOCAB_SIZE, output_dim=32, input_length=Config.MAX_SEQUENCE_LENGTH),
@@ -428,7 +428,7 @@ def train_bilstm(X_train_seq, y_train, X_valid_seq, y_valid, model_name="BiLSTM"
 
 
 def train_stacked_bilstm(X_train_seq, y_train, X_valid_seq, y_valid, model_name="Stacked BiLSTM"):
-    print(f"\nTraining {model_name}...")
+    print(f"\nTraining {model_name}")
     
     model = Sequential([
         Embedding(input_dim=Config.VOCAB_SIZE, output_dim=Config.EMBEDDING_DIM, input_length=Config.MAX_SEQUENCE_LENGTH),
@@ -456,7 +456,7 @@ def train_stacked_bilstm(X_train_seq, y_train, X_valid_seq, y_valid, model_name=
 
 
 def train_cnn(X_train_seq, y_train, X_valid_seq, y_valid, model_name="CNN"):
-    print(f"\nTraining {model_name}...")
+    print(f"\nTraining {model_name}")
     
     model = Sequential([
         Embedding(input_dim=Config.VOCAB_SIZE, output_dim=Config.EMBEDDING_DIM, input_length=Config.MAX_SEQUENCE_LENGTH),
@@ -482,9 +482,8 @@ def train_cnn(X_train_seq, y_train, X_valid_seq, y_valid, model_name="CNN"):
 
 
 def test_ensemble_combinations(models_dict, X_valid_tfidf, X_valid_combined, X_valid_seq, y_valid):
-    print("\n" + "="*60)
+
     print("TESTING ALL ENSEMBLE COMBINATIONS")
-    print("="*60)
     
     predictions = {}
     predictions['svm_original'] = models_dict['svm_original'].predict(X_valid_tfidf)
@@ -568,9 +567,8 @@ def main():
     
     tokenizer, X_train_seq, X_valid_seq, X_test_seq = prepare_sequences(train_df, valid_df, test_df)
     
-    print("\n" + "="*60)
+
     print("TRAINING NEURAL NETWORK MODELS")
-    print("="*60)
     
     lstm_model, lstm_results, lstm_history = train_lstm(X_train_seq, y_train, X_valid_seq, y_valid)
     bilstm_model, bilstm_results, bilstm_history = train_bilstm(X_train_seq, y_train, X_valid_seq, y_valid)
