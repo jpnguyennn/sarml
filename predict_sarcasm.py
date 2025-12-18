@@ -53,24 +53,17 @@ class SarcasmDetector:
             raise FileNotFoundError(f"Models directory '{model_dir}' not found.")
         
         try:
-            # Load Tokenizers [cite: 148, 216]
-            with open(os.path.join(model_dir, 'tokenizer.pkl'), 'rb') as f:
-                self.tokenizer = pickle.load(f)
-            with open(os.path.join(model_dir, 'tokenizer_clean.pkl'), 'rb') as f:
+            tokenizer_path = os.path.join(model_dir, 'tokenizer_clean.pkl')
+            with open(tokenizer_path, 'rb') as f:
                 self.tokenizer_clean = pickle.load(f)
             
-            # Load Deep Learning Models (.h5 files as specified)
-            # 1. Standard LSTM
-            self.model_lstm = load_model(os.path.join(model_dir, 'lstm_model.h5'))
-            # 2. Bidirectional LSTM
-            self.model_bilstm = load_model(os.path.join(model_dir, 'bilstm_model.h5'))
-            # 3. CNN Model
-            self.model_cnn = load_model(os.path.join(model_dir, 'cnn_model.h5'))
+            model_path = os.path.join(model_dir, 'cnn_model.h5')
+            self.model_cnn = load_model(model_path)
             
-            print(" - All models loaded successfully.")
+            print(f" - CNN model loaded successfully.")
             
         except Exception as e:
-            print(f"Error loading models: {e}")
+            print(f"Error loading model components: {e}")
             sys.exit(1)
     
     def predict(self, texts):
@@ -79,20 +72,14 @@ class SarcasmDetector:
         
         df = pd.DataFrame({'text': texts})
         clean_texts = df['text'].apply(preprocess_text)
-        seq_standard = pad_sequences(self.tokenizer.texts_to_sequences(df['text']), 
-                                    maxlen=Config.MAX_SEQUENCE_LENGTH)
-        seq_clean = pad_sequences(self.tokenizer_clean.texts_to_sequences(clean_texts), 
-                                 maxlen=Config.MAX_SEQUENCE_LENGTH)
         
-        print("Running Ensemble Inference...")
-        pred_lstm = (self.model_lstm.predict(seq_standard, verbose=0) > 0.5).astype(int).flatten()
-        pred_bilstm = (self.model_bilstm.predict(seq_clean, verbose=0) > 0.5).astype(int).flatten()
-        pred_cnn = (self.model_cnn.predict(seq_clean, verbose=0) > 0.5).astype(int).flatten()
+        sequences = self.tokenizer_clean.texts_to_sequences(clean_texts)
+        padded_seq = pad_sequences(sequences, maxlen=Config.MAX_SEQUENCE_LENGTH)
         
-        votes = pred_lstm + pred_bilstm + pred_cnn
-        ensemble_predictions = (votes >= 2).astype(int)
+        probs = self.model_cnn.predict(padded_seq, verbose=0)
+        predictions = (probs > 0.5).astype(int).flatten()
         
-        return ensemble_predictions
+        return predictions
     
     def predict_with_confidence(self, texts):
         predictions = self.predict(texts)
