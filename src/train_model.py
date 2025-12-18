@@ -6,6 +6,7 @@ import re
 import pickle
 import warnings
 import os
+from itertools import combinations
 from scipy.sparse import hstack
 
 from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
@@ -27,7 +28,6 @@ from tensorflow.keras.callbacks import EarlyStopping
 
 warnings.filterwarnings('ignore')
 
-# ==================== CONFIGURATION ====================
 class Config:
     TRAIN_PATH = './datasets/train.csv'
     VALID_PATH = './datasets/valid.csv'
@@ -95,7 +95,6 @@ def analyze_text_lengths(train_df, valid_df, test_df):
     print()
 
 
-# ==================== PREPROCESSING ====================
 def preprocess_text(text):
     text = text.lower()
     text = re.sub(r'http\S+|www\S+', '', text)  
@@ -117,7 +116,6 @@ def extract_features(df):
     return features
 
 
-# ==================== EVALUATION UTILITIES ====================
 def evaluate_model(y_true, y_pred, model_name, verbose=True):
     accuracy = accuracy_score(y_true, y_pred)
     precision, recall, f1, support = precision_recall_fscore_support(
@@ -166,10 +164,9 @@ def evaluate_model(y_true, y_pred, model_name, verbose=True):
 
 
 def analyze_errors(df, y_true, y_pred, model_name, n_examples=10):
-    print(f"\n{'='*60}")
+
     print(f"ERROR ANALYSIS: {model_name}")
-    print(f"{'='*60}\n")
-    
+
     errors = df.copy()
     errors['true_label'] = y_true.values if hasattr(y_true, 'values') else y_true
     errors['predicted_label'] = y_pred
@@ -177,22 +174,13 @@ def analyze_errors(df, y_true, y_pred, model_name, n_examples=10):
     
     false_positives = errors[(errors['true_label'] == 0) & (errors['predicted_label'] == 1)]
     print(f"FALSE POSITIVES (predicted sarcastic, actually NOT): {len(false_positives)}")
-    print("\nExamples:")
-    for idx, row in false_positives.head(n_examples).iterrows():
-        print(f"  • {row['text'][:120]}...")
-    
-    print(f"\n{'-'*60}\n")
     
     false_negatives = errors[(errors['true_label'] == 1) & (errors['predicted_label'] == 0)]
     print(f"FALSE NEGATIVES (predicted NOT sarcastic, actually sarcastic): {len(false_negatives)}")
-    print("\nExamples:")
-    for idx, row in false_negatives.head(n_examples).iterrows():
-        print(f"  • {row['text'][:120]}...")
     
     return false_positives, false_negatives
 
 
-# ==================== VISUALIZATION UTILITIES ====================
 def plot_confusion_matrix(cm, model_name, save_path=None):
     plt.figure(figsize=(8, 6))
     sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
@@ -297,7 +285,6 @@ def plot_text_length_distribution(train_df, valid_df, test_df, save_path=None):
     plt.close()
 
 
-# ==================== BASELINE MODELS ====================
 def train_baseline_models(train_df, valid_df, y_train, y_valid):
     print("TRAINING BASELINE MODELS")
     
@@ -365,7 +352,6 @@ def test_manual_features(train_df, valid_df, test_df, X_train_tfidf, X_valid_tfi
     return results_with, svm_with_features, X_train_combined, X_valid_combined
 
 
-# ==================== DEEP LEARNING MODELS ====================
 def prepare_sequences(train_df, valid_df, test_df):    
     train_df['clean_text'] = train_df['text'].apply(preprocess_text)
     valid_df['clean_text'] = valid_df['text'].apply(preprocess_text)
@@ -497,7 +483,7 @@ def train_cnn(X_train_seq, y_train, X_valid_seq, y_valid, model_name="CNN"):
 
 def test_ensemble_combinations(models_dict, X_valid_tfidf, X_valid_combined, X_valid_seq, y_valid):
     print("\n" + "="*60)
-    print("TESTING ENSEMBLE COMBINATIONS")
+    print("TESTING ALL ENSEMBLE COMBINATIONS")
     print("="*60)
     
     predictions = {}
@@ -508,34 +494,54 @@ def test_ensemble_combinations(models_dict, X_valid_tfidf, X_valid_combined, X_v
     predictions['stacked_bilstm'] = (models_dict['stacked_bilstm'].predict(X_valid_seq, verbose=0) > 0.5).astype(int).flatten()
     predictions['cnn'] = (models_dict['cnn'].predict(X_valid_seq, verbose=0) > 0.5).astype(int).flatten()
     
+    model_names = list(predictions.keys())
     ensemble_results = {}
-    combinations = [
-        (['svm_original', 'lstm', 'bilstm'], "SVM + LSTM + BiLSTM"),
-        (['svm_original', 'stacked_bilstm', 'cnn'], "SVM + Stacked BiLSTM + CNN"),
-        (['svm_with_features', 'stacked_bilstm', 'cnn'], "SVM(+features) + Stacked BiLSTM + CNN"),
-        (['stacked_bilstm', 'cnn'], "Stacked BiLSTM + CNN (no SVM)"),
-        (['svm_original', 'cnn'], "SVM + CNN"),
-        (['cnn'], "CNN alone (best single model)"),
-    ]
     
-    print("\nEnsemble Combinations:")
-    for model_keys, ensemble_name in combinations:
-        votes = sum(predictions[k] for k in model_keys)
-        threshold = len(model_keys) / 2
-        ensemble_pred = (votes > threshold).astype(int)
-        acc = accuracy_score(y_valid, ensemble_pred)
-        f1 = f1_score(y_valid, ensemble_pred)
-        ensemble_results[ensemble_name] = {'models': model_keys, 'predictions': ensemble_pred, 'accuracy': acc, 'f1': f1}
-        print(f"  {ensemble_name:45} | Acc: {acc:.4f} | F1: {f1:.4f}")
+    max_size = 3
+    total_combos = sum(len(list(combinations(model_names, i))) for i in range(1, max_size+1))
+    print(f"\nTesting {total_combos} combinations (sizes 1-{max_size})...")
+    
+    for size in range(1, max_size + 1):
+        for combo in combinations(model_names, size):
+            short_names = {
+                'svm_original': 'SVM',
+                'svm_with_features': 'SVM+feat',
+                'lstm': 'LSTM',
+                'bilstm': 'BiLSTM',
+                'stacked_bilstm': 'StackBiLSTM',
+                'cnn': 'CNN'
+            }
+            ensemble_name = ' + '.join([short_names[m] for m in combo])
+            
+            votes = sum(predictions[k] for k in combo)
+            threshold = len(combo) / 2
+            ensemble_pred = (votes > threshold).astype(int)
+            
+            acc = accuracy_score(y_valid, ensemble_pred)
+            f1 = f1_score(y_valid, ensemble_pred)
+            
+            ensemble_results[ensemble_name] = {
+                'models': list(combo),
+                'predictions': ensemble_pred,
+                'accuracy': acc,
+                'f1': f1,
+                'size': len(combo)
+            }
     
     best_ensemble = max(ensemble_results.items(), key=lambda x: x[1]['accuracy'])
-    print(f"\n→ Best ensemble: {best_ensemble[0]}")
+    
+    print("\nTop 3 Ensembles by Accuracy:")
+    sorted_ensembles = sorted(ensemble_results.items(), key=lambda x: x[1]['accuracy'], reverse=True)
+    for i, (name, result) in enumerate(sorted_ensembles[:3], 1):
+        print(f"  {i}. {name:40s} | Acc: {result['accuracy']:.4f} | F1: {result['f1']:.4f} | Size: {result['size']}")
+    
+    print(f"\nBest ensemble: {best_ensemble[0]}")
     print(f"  Accuracy: {best_ensemble[1]['accuracy']:.4f} | F1: {best_ensemble[1]['f1']:.4f}")
+    print(f"  Models: {best_ensemble[1]['models']}")
     
     return ensemble_results, best_ensemble
 
 
-# ==================== MAIN EXECUTION ====================
 def main():
 
     print(f"Random Seed: {Config.RANDOM_SEED}")
@@ -587,9 +593,6 @@ def main():
     
     ensemble_results, best_ensemble = test_ensemble_combinations(models_dict, X_valid_tfidf, X_valid_combined, X_valid_seq, y_valid)
     
-    print("\n" + "="*60)
-    print("FINAL EVALUATION ON TEST SET")
-    print("="*60)
     
     test_predictions = {}
     for model_key in best_ensemble[1]['models']:
@@ -610,39 +613,25 @@ def main():
     test_ensemble_pred = (test_votes > threshold).astype(int)
     test_results = evaluate_model(y_test, test_ensemble_pred, best_ensemble[0], verbose=True)
     
-    print("\n" + "="*60)
-    print("DETAILED ERROR ANALYSIS")
-    print("="*60)
+
     fp, fn = analyze_errors(test_df, y_test, test_ensemble_pred, best_ensemble[0])
-    print("\n" + "="*60)
-    print("KEY FINDINGS & RECOMMENDATIONS")
-    print("="*60)
     
-    print("\n1. TEXT LENGTH:")
-    print(f"   - Using sequence length {Config.MAX_SEQUENCE_LENGTH} reduces truncation")
     
-    print("\n2. MANUAL FEATURES:")
-    print(f"   - Manual features provide minimal benefit")
-    print(f"   - TF-IDF likely captures these patterns already")
-    
-    print("\n3. MODEL COMPARISON:")
+    print("\n MODEL COMPARISON:")
     print(f"   - Best single model: CNN ({cnn_results['accuracy']:.4f})")
     print(f"   - LSTM: {lstm_results['accuracy']:.4f}")
     print(f"   - BiLSTM: {bilstm_results['accuracy']:.4f} (worse without capacity)")
     print(f"   - Stacked BiLSTM: {stacked_bilstm_results['accuracy']:.4f} (better with capacity)")
     
-    print("\n4. ENSEMBLE:")
+    print("\n ENSEMBLE:")
     print(f"   - Best: {best_ensemble[0]}")
     print(f"   - Validation: {best_ensemble[1]['accuracy']:.4f}")
     print(f"   - Test: {test_results['accuracy']:.4f}")
     
-    print("\n5. ERROR PATTERNS:")
+    print("\n ERROR PATTERNS:")
     print(f"   - False Positives: {len(fp)} ({100*len(fp)/len(test_df):.2f}%)")
     print(f"   - False Negatives: {len(fn)} ({100*len(fn)/len(test_df):.2f}%)")
     
-    print("\n" + "="*60)
-    print("GENERATING VISUALIZATIONS")
-    print("="*60)
     os.makedirs(Config.FIGURES_DIR, exist_ok=True)
     
     plot_text_length_distribution(train_df, valid_df, test_df,
@@ -666,11 +655,7 @@ def main():
                          save_path=f'{Config.FIGURES_DIR}training_history_cnn.png')
     print("✓ Visualizations generated!")
     
-    # ==================== FINAL SUBMISSION: LSTM + BiLSTM + CNN ENSEMBLE ====================
-    print("\n" + "="*60)
-    print("SAVING FINAL SUBMISSION MODELS (LSTM + BiLSTM + CNN)")
-    print("="*60)
-    os.makedirs(Config.MODEL_DIR, exist_ok=True)
+
     
     # Save 3-model ensemble for predict_sarcasm.py
     lstm_model.save(f'{Config.MODEL_DIR}lstm_model.h5')
@@ -699,9 +684,8 @@ def main():
     print(f"  - {Config.MODEL_DIR}tokenizer.pkl")
     print(f"  - {Config.MODEL_DIR}model_weights.pkl")
     
-    print("\n" + "="*60)
-    print("TRAINING COMPLETE!")
-    print("="*60)
+
+    print("Results:")
     print(f"\nFinal Test Accuracy: {test_results['accuracy']:.4f}")
     print(f"Final Test F1 Score: {test_results['f1_macro']:.4f}")
 
